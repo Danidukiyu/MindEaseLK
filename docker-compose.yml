@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:16
+    container_name: melk_db
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: mindease
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d mindease"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: ./backend
+    container_name: melk_backend
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    env_file: ./backend/.env
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DB_HOST=db
+      - DB_USER=user
+      - DB_PASSWORD=password
+      - DB_NAME=mindease
+      - DB_PORT=5432
+
+volumes:
+  postgres_data:
