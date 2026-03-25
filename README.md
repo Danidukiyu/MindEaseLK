@@ -1,6 +1,6 @@
 # MindEaseLK
 
-App To Improve Youths Mental Health.
+MindEaseLK is a full-stack mental wellness application for youth.
 
 MindEaseLK is a full-stack mental wellness project with:
 - A Node.js/Express backend (`backend/`)
@@ -42,6 +42,7 @@ From project root:
 
 ```bash
 npm run docker:db
+npm run start:backend
 npm run setup-test
 npm run start:frontend
 ```
@@ -54,6 +55,10 @@ Available root scripts:
 - `npm run start:backend`
 - `npm run start:frontend`
 - `npm run start`
+
+Notes:
+- `start:frontend` runs `MindEaseApp/scripts/update-ip.js` before starting Expo so mobile devices can call the backend on your machine.
+- Start backend and frontend in separate terminals for local development.
 
 ## Backend Run
 
@@ -76,7 +81,28 @@ Create environment files as needed:
 - `backend/.env`
 - `MindEaseApp/.env`
 
-Do not commit secrets.
+Required backend variables in `backend/.env`:
+
+```env
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=admin
+DB_NAME=mindease
+JWT_SECRET=your_jwt_secret_here
+GEMINI_API_KEY=your_gemini_api_key_here
+```
+
+Security:
+- Do not hardcode API keys in source code.
+- Do not commit `.env` files.
+- Rotate your Gemini key immediately if it was ever exposed.
+
+## Recent Backend Updates
+
+- Added session delete endpoint: `DELETE /bot/sessions/:id`
+- Added diary search endpoint: `GET /diary/search?q=...`
+- Added prompt safety checks for harmful or abusive requests in bot chat flow
 
 ## Collaborator Handoff
 

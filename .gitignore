@@ -96,7 +96,3 @@ vite.config.ts.timestamp-*
 
 node_modules/
 .taskmaster/
-MindEaseApp/
-backend/
-.gitignore/
- 2d3b6bd (Syncing with repository and adding setup files)

@@ -6,7 +6,7 @@
     "setup-test": "node setup-test-account.js",
     "docker:db": "docker-compose up --build -d ",
     "start:backend": "start cmd /k \"cd backend && npm start\"",
-    "start:frontend": "start cmd /k \"cd MindEaseApp && npx expo start\"",
+    "start:frontend": "start cmd /k \"cd MindEaseApp && node scripts/update-ip.js && npx expo start\"",
     "start": "npm run docker:db && npm run setup-test && npm run start:frontend"
   },
   "dependencies": {

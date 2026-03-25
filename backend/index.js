@@ -10,21 +10,58 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const JWT_SECRET = process.env.JWT_SECRET || 'secret';
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "AIzaSyAtps-FRpdtdNpjfEMU5n-Bo8_YpinRNd4";
+const JWT_SECRET = process.env.JWT_SECRET;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 if (!GEMINI_API_KEY) {
   console.error("WARNING: No GEMINI_API_KEY found in .env!");
+}
+
+const SAFETY_REFUSAL_MESSAGE =
+  "I can't help with harmful, abusive, sexual, illegal, or dangerous requests. I can help with safe wellness support, stress management, and healthy coping strategies instead.";
+
+const HARMFUL_OR_INAPPROPRIATE_PATTERN = new RegExp(
+  [
+    "\\b(kill myself|suicide method|self[- ]?harm method)\\b",
+    "\\b(how to kill|how to make a bomb|build a bomb|explosive device)\\b",
+    "\\b(stab|shoot|poison)\\b.*\\b(person|someone|people)\\b",
+    "\\b(hack|phish|ddos|malware|ransomware|keylogger)\\b",
+    "\\b(credit card fraud|steal password|bypass otp|identity theft)\\b",
+    "\\b(child porn|underage sex|rape|sexual assault)\\b",
+    "\\b(hate speech|racial slur|genocide)\\b",
+    "\\b(buy drugs|make meth|cocaine recipe)\\b"
+  ].join("|"),
+  "i"
+);
+
+function isHarmfulOrInappropriatePrompt(message) {
+  if (!message || typeof message !== 'string') return false;
+  return HARMFUL_OR_INAPPROPRIATE_PATTERN.test(message);
 }
 
 // Helper: Call AI using Axios for better stability in Node environment
 async function callAI(message) {
   const model = "gemini-flash-lite-latest";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+  const systemInstruction = [
+    "You are MindEase, a mental wellness assistant for young users.",
+    "Never provide instructions, encouragement, or details for harmful, illegal, sexual, hateful, abusive, or dangerous behavior.",
+    "Refuse harmful requests briefly and redirect to safe alternatives.",
+    "If content suggests self-harm intent, respond with empathetic support, encourage contacting trusted people, and suggest local emergency help if immediate danger exists.",
+    "Keep replies supportive, non-judgmental, concise, and age-appropriate."
+  ].join(" ");
   
   try {
     const response = await axios.post(url, {
-      contents: [{ parts: [{ text: message }] }]
+      system_instruction: {
+        parts: [{ text: systemInstruction }]
+      },
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: message }]
+        }
+      ]
     });
     
     if (response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
@@ -145,6 +182,29 @@ app.post('/bot/sessions', authenticateToken, async (req, res) => {
   }
 });
 
+app.delete('/bot/sessions/:id', authenticateToken, async (req, res) => {
+  const sessionId = Number(req.params.id);
+
+  if (!Number.isInteger(sessionId) || sessionId <= 0) {
+    return res.status(400).json({ error: 'Invalid session id.' });
+  }
+
+  try {
+    const result = await pool.query(
+      'DELETE FROM chat_sessions WHERE id = $1 AND user_id = $2 RETURNING id',
+      [sessionId, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Session not found.' });
+    }
+
+    res.sendStatus(204);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // To track active AI requests and prevent concurrency issues per user
 const pendingRequests = new Set();
 
@@ -157,6 +217,10 @@ app.post('/bot/chat', authenticateToken, async (req, res) => {
 
   if (!message || typeof message !== 'string') {
     return res.status(400).json({ error: "Message is required and must be a string." });
+  }
+
+  if (isHarmfulOrInappropriatePrompt(message)) {
+    return res.json({ response: SAFETY_REFUSAL_MESSAGE, session_id: currentSessionId || null });
   }
 
   if (pendingRequests.has(userId)) {
@@ -283,6 +347,19 @@ app.get('/diary', authenticateToken, async (req, res) => {
     const result = await pool.query('SELECT * FROM diary_entries WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10', [req.user.id]);
     res.json(result.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/diary/search', authenticateToken, async (req, res) => {
+  const { q } = req.query;
+  try {
+    const result = await pool.query(
+      'SELECT * FROM diary_entries WHERE user_id = $1 AND content ILIKE $2 ORDER BY created_at DESC',
+      [req.user.id, `%${q || ''}%`]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.put('/diary/:id', authenticateToken, async (req, res) => {
